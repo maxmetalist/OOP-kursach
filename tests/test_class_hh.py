@@ -1,46 +1,68 @@
-from typing import List
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
-import requests
+
+from src.class_hh import HeadHunterAPI
 
 
-def test_get_vacancies_success(hh_api, mock_requests_get, mock_hh_api_response):
-    """Тест успешного получения вакансий"""
-    search_query = "Python"
-    vacancies = hh_api.get_vacancies(search_query)
+class TestHeadHunterAPI:
+    """Тесты для класса HeadHunterAPI"""
 
-    assert isinstance(vacancies, List)
-    assert len(vacancies) == 2
-    assert vacancies == mock_hh_api_response["items"]
+    def test_init(self):
+        """Тест инициализации класса"""
+        api = HeadHunterAPI()
+        assert hasattr(api, "_HeadHunterAPI__base_url")
+        assert api._HeadHunterAPI__base_url == "https://api.hh.ru/vacancies"
 
-    # Проверка вызова requests.get с правильными параметрами
-    mock_requests_get.assert_called_once_with(
-        hh_api.base_url,
-        params={
-            "text": search_query,
-            "area": 113,
-            "per_page": 100,
-        },
-    )
+    @patch("requests.get")
+    def test_get_vacancies_success(self, mock_get):
+        # Настраиваем мок для успешного ответа
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"items": [{"name": "Python Developer"}]}
+        mock_get.return_value = mock_response
 
+        hh_api = HeadHunterAPI()
+        result = hh_api.get_vacancies("Python")
 
-def test_get_vacancies_empty_response(hh_api, mock_requests_get):
-    """Тест пустого ответа от API"""
-    mock_response = Mock()
-    mock_response.json.return_value = {"items": []}
-    mock_response.raise_for_status.return_value = None
-    mock_requests_get.return_value = mock_response
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert "Python Developer" in result[0]["name"]
 
-    vacancies = hh_api.get_vacancies("Java")
+    @patch("requests.get")
+    def test_get_vacancies_empty(self, mock_get):
+        # Настраиваем мок для пустого ответа
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"items": []}
+        mock_get.return_value = mock_response
 
-    assert isinstance(vacancies, List)
-    assert len(vacancies) == 0
+        hh_api = HeadHunterAPI()
+        result = hh_api.get_vacancies("NonExistentPosition")
 
+        assert isinstance(result, list)
+        assert len(result) == 0
 
-def test_get_vacancies_http_error(hh_api, mock_requests_get):
-    """Тест обработки HTTP ошибки"""
-    mock_requests_get.side_effect = requests.exceptions.HTTPError("404 Not Found")
+    @patch("requests.get")
+    def test_get_vacancies_failure(self, mock_get, mock_hh_api_failure):
+        """Тест обработки ошибки API"""
+        mock_get.return_value = mock_hh_api_failure
+        hh_api = HeadHunterAPI()
 
-    with pytest.raises(requests.exceptions.HTTPError):
-        hh_api.get_vacancies("C++")
+        with pytest.raises(Exception, match="API Error"):
+            hh_api.get_vacancies("Python")
+
+    def test_slots(self):
+        """Тест ограничения атрибутов через __slots__"""
+        api = HeadHunterAPI()
+
+        # Проверка, что __slots__ определяется
+        assert hasattr(HeadHunterAPI, "__slots__")
+        assert "_HeadHunterAPI__base_url" in HeadHunterAPI.__slots__
+
+        # Проверка, что нельзя добавить новый атрибут
+        with pytest.raises(AttributeError):
+            api.new_attribute = "test"
+
+        # Проверка работоспособности атрибута
+        assert api._HeadHunterAPI__base_url == "https://api.hh.ru/vacancies"

@@ -47,6 +47,16 @@ def hh_api():
     return HeadHunterAPI()
 
 
+@pytest.fixture
+def mock_hh_api_failure():
+    """Фикстура для ошибочного ответа API HH"""
+    mock_response = Mock()
+    mock_response.status_code = 404
+    mock_response.json.side_effect = Exception("API Error")
+    mock_response.raise_for_status.side_effect = Exception("API Error")
+    return mock_response
+
+
 # Фикстуры для тестов модуля vacancy
 @pytest.fixture
 def sample_vacancy_data() -> Dict:
